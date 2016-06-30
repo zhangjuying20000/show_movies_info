@@ -250,11 +250,53 @@ class Crawler():
 
         chart = workbook.add_chart({'type' : 'column'})
 
-        worksheet.write_column('A1', movie_types_dict.keys())
-        worksheet.write_column('B1', movie_types_dict.values())
+        type = '类型'
+        num = '数目'
+        worksheet.write_column('A1', type)
+        worksheet.write_column('B1', num)
+        worksheet.write_column('A2', movie_types_dict.keys())
+        worksheet.write_column('B2', movie_types_dict.values())
 
-        chart.add_series({'values' : '=Sheet1!$A$1:$A$25'})
-        chart.add_series({'values' : '=Sheet1!$B$1:$B$25'})
+        chart.add_series({'name' : '影片数目',
+                          'categories' : ['Sheet1', 1, 0, 1+len(movie_types_dict.keys()), 0],
+                          'values' : ['Sheet1', 1, 1, 1+len(movie_types_dict.values()), 1],
+                          'color' : 'red',
+                          'data_labels' : {'value' : True}})
+
+        #设置X轴属性
+        chart.set_x_axis({
+            'name' : '影片类型',
+            'name_font' : {'size' : 14, 'bold' : False},
+            'num_font' : {'size' : 12},
+            'line' : {'none' : True},
+            'major_gridlines' : {
+                'visible' : True,
+                'line' : {'width' : 1.5, 'dash_type' : 'dash'}
+            },
+            'text_axis' : True
+        })
+
+        #设置长宽
+        chart.set_size({
+            'x_scale' : 3,
+            'y_scale' : 2
+        })
+
+        #设置标题
+        chart.set_title({
+            'name' : '15/07/01 - 16/06/30 观影统计'
+        })
+
+        #设置属性块
+        chart.set_legend({
+            'position' : 'left'
+        })
+
+        #图下方显示表格
+        chart.set_table({
+            'show_keys' : True,
+            'font' : {'size' : 12}
+        })
 
         worksheet.insert_chart('C1', chart)
         workbook.close()
