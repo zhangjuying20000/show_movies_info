@@ -1,17 +1,19 @@
+import os
 import re
 import zlib
 import urllib
 import xlsxwriter
 import http.client
 import urllib.request
-import mysql.connector
+import pymysql
+import win32com.client
 from bs4 import BeautifulSoup
 
 class Crawler():
 
     def __init__(self):
-        self.conn = mysql.connector.connect(user='root', password='root', host='localhost', database='movies')
-        self.cursor = self.conn.cursor(buffered=True)
+        self.conn = pymysql.connect(user='root', passwd='root', host='localhost', port=3306, db='movies', charset='UTF8')
+        self.cursor = self.conn.cursor()
         self.carShouYeUrlSet = []
 
     def __del__(self):
@@ -118,6 +120,7 @@ class Crawler():
             self.cursor.execute(query, (new_movie_name,))
             self.conn.commit()
             res = self.cursor.fetchall()
+
             try:
                 [rate, watch_time, comment, movie_types, movie_language, movie_country, movie_director] = res[0]
             except IndexError as e:
@@ -215,13 +218,14 @@ class Crawler():
                 movie_country = movie_info['制片国家/地区']
                 movie_director = movie_info['导演']
 
+                print(comment)
                 query = 'INSERT INTO douban_movie(movie_name, rate, watch_time, comment, movie_types, movie_language, movie_country, movie_director) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)'
                 self.cursor.execute(query, (movie_name, rate, watch_time, comment, movie_types, movie_language, movie_country, movie_director))
                 self.conn.commit()
         return
 
-    #数据可视化展示
-    def show_datas(self):
+    #将电影类型分类展示在柱状图中并统计数量
+    def show_types_in_column(self, chart, worksheet):
 
         query = 'SELECT movie_name, movie_types FROM movie'
         self.cursor.execute(query)
@@ -244,11 +248,6 @@ class Crawler():
         table_data = [['类型', '片数'],]
         for key, val in movie_types_dict.items():
             table_data.append([key, val])
-
-        workbook = xlsxwriter.Workbook('chart.xlsx')
-        worksheet = workbook.add_worksheet()
-
-        chart = workbook.add_chart({'type' : 'column'})
 
         type = '类型'
         num = '数目'
@@ -278,7 +277,7 @@ class Crawler():
 
         #设置长宽
         chart.set_size({
-            'x_scale' : 3,
+            'x_scale' : 2.5,
             'y_scale' : 2
         })
 
@@ -298,8 +297,138 @@ class Crawler():
             'font' : {'size' : 12}
         })
 
+    #将电影语言分类展示在饼状图中
+    def show_languages_in_pie(self):
+        pass
+
+    #数据可视化展示
+    def show_datas(self):
+
+        workbook = xlsxwriter.Workbook('chart.xlsx')
+        worksheet = workbook.add_worksheet()
+
+        chart = workbook.add_chart({'type' : 'column'})
+
+        self.show_types_in_column(chart, worksheet)
+
         worksheet.insert_chart('C1', chart)
         workbook.close()
+
+    def unit_test(self):
+        workbook = xlsxwriter.Workbook('chart_column.xlsx')
+        worksheet = workbook.add_worksheet()
+        bold = workbook.add_format({'bold': 1})
+        # 这是个数据table的列
+        headings = ['Number', 'Batch 1', 'Batch 2']
+        data = [
+            [2, 3, 4, 5, 6, 7],
+            [10, 40, 50, 20, 10, 50],
+            [30, 60, 70, 50, 40, 30],
+        ]
+        worksheet.write_row('A1', headings, bold)
+        worksheet.write_column('A2', data[0])
+        worksheet.write_column('B2', data[1])
+        worksheet.write_column('C2', data[2])
+        ############################################
+        #创建一个图表，类型是column
+        chart1 = workbook.add_chart({'type': 'column'})
+        # 配置series,这个和前面wordsheet是有关系的。
+        chart1.add_series({
+            'name':       '=Sheet1!$B$1',
+            'categories': '=Sheet1!$A$2:$A$7',
+            'values':     '=Sheet1!$B$2:$B$7',
+        })
+        # Configure a second series. Note use of alternative syntax to define ranges.
+        chart1.add_series({
+            'name':       ['Sheet1', 0, 2],
+            'categories': ['Sheet1', 1, 0, 6, 0],
+            'values':     ['Sheet1', 1, 2, 6, 2],
+        })
+        # Add a chart title and some axis labels.
+        chart1.set_title ({'name': 'Results of sample analysis'})
+        chart1.set_x_axis({'name': 'Test number'})
+        chart1.set_y_axis({'name': 'Sample length (mm)'})
+        # Set an Excel chart style.
+        chart1.set_style(11)
+        # Insert the chart into the worksheet (with an offset).
+        worksheet.insert_chart('D2', chart1, {'x_offset': 25, 'y_offset': 10})
+        #######################################################################
+        #
+        # Create a stacked chart sub-type.
+        #
+        chart2 = workbook.add_chart({'type': 'column', 'subtype': 'stacked'})
+        # Configure the first series.
+        chart2.add_series({
+            'name':       '=Sheet1!$B$1',
+            'categories': '=Sheet1!$A$2:$A$7',
+            'values':     '=Sheet1!$B$2:$B$7',
+        })
+        # Configure second series.
+        chart2.add_series({
+            'name':       '=Sheet1!$C$1',
+            'categories': '=Sheet1!$A$2:$A$7',
+            'values':     '=Sheet1!$C$2:$C$7',
+        })
+        # Add a chart title and some axis labels.
+        chart2.set_title ({'name': 'Stacked Chart'})
+        chart2.set_x_axis({'name': 'Test number'})
+        chart2.set_y_axis({'name': 'Sample length (mm)'})
+        # Set an Excel chart style.
+        chart2.set_style(12)
+        # Insert the chart into the worksheet (with an offset).
+        worksheet.insert_chart('D18', chart2, {'x_offset': 25, 'y_offset': 10})
+        #######################################################################
+        #
+        # Create a percentage stacked chart sub-type.
+        #
+        chart3 = workbook.add_chart({'type': 'column', 'subtype': 'percent_stacked'})
+        # Configure the first series.
+        chart3.add_series({
+            'name':       '=Sheet1!$B$1',
+            'categories': '=Sheet1!$A$2:$A$7',
+            'values':     '=Sheet1!$B$2:$B$7',
+        })
+        # Configure second series.
+        chart3.add_series({
+            'name':       '=Sheet1!$C$1',
+            'categories': '=Sheet1!$A$2:$A$7',
+            'values':     '=Sheet1!$C$2:$C$7',
+        })
+        # Add a chart title and some axis labels.
+        chart3.set_title ({'name': 'Percent Stacked Chart'})
+        chart3.set_x_axis({'name': 'Test number'})
+        chart3.set_y_axis({'name': 'Sample length (mm)'})
+        # Set an Excel chart style.
+        chart3.set_style(13)
+        # Insert the chart into the worksheet (with an offset).
+        worksheet.insert_chart('D34', chart3, {'x_offset': 25, 'y_offset': 10})
+        workbook.close()
+
+    def excute_vba(self):
+        import os
+        from win32com.client import Dispatch
+        #from win32com.client import *;
+
+        xl = Dispatch("Excel.Application")
+        #xl = win32com.client.Dispatch("Excel.Application")
+        print("xl=",xl)
+
+        #[5] OK
+        xlsPath = "chart_column.xlsx"
+        absPath = os.path.abspath(xlsPath)
+        print("absPath=",absPath) #absPath= D:\tmp\tmp_dev_root\python\excel_chart\chart_demo.xls
+        wb = xl.Workbooks.open(absPath) #OK
+
+        xl.Visible = 1
+
+        ws = wb.Worksheets(1)
+
+        ws.Chart.Export("", "JPG")
+
+
+        wb.Save()
+        wb.Charts.Add()
+        wc1 = wb.Charts(1)
 
 def main():
     crawler = Crawler()
@@ -312,6 +441,10 @@ def main():
     #crawler.search_movies('yinwoods')
 
     crawler.show_datas()
+
+    #crawler.unit_test()
+
+    #crawler.excute_vba()
 
 if __name__ == "__main__":
     main()
