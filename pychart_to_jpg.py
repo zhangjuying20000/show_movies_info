@@ -44,24 +44,24 @@ class Pyxlchart(object):
         if worksheet != "" and chartname != "":
             sht = self._change_sheet(wb,worksheet)
             cht = sht.ChartObjects(chartname)
-            self._save_chart(cht)
+            self._save_chart(cht, sht.Name)
             return
         if worksheet == "":
             for sht in wb.Worksheets:
                 for cht in sht.ChartObjects():
                     if chartname == "":
-                        self._save_chart(cht)
+                        self._save_chart(cht, sht.Name)
                     else:
                         if chartname == cht.Name:
-                            self._save_chart(cht)
+                            self._save_chart(cht, sht.Name)
         else:
             sht = wb.Worksheets(worksheet)
             for cht in sht.ChartObjects():
                 if chartname == "":
-                    self._save_chart(cht)
+                    self._save_chart(cht, sht.Name)
                 else:
                     if chartname == cht.Name:
-                        self._save_chart(cht)
+                        self._save_chart(cht, sht.Name)
 
     def _change_sheet(self,wb,worksheet):
         try:
@@ -69,13 +69,13 @@ class Pyxlchart(object):
         except:
             raise NameError('Unable to Select Sheet: ' + worksheet + ' in Workbook: ' + wb.Name)
 
-    def _save_chart(self,chartObject):
-        imagename = self._get_filename(chartObject.Name)
+    def _save_chart(self,chartObject, sheetnamme):
+        imagename = self._get_filename(chartObject.Name, sheetnamme)
         savepath = os.path.join(self.ExportPath,imagename)
         print(savepath)
         chartObject.Chart.Export(savepath,self.ImageType)
 
-    def _get_filename(self,chartname):
+    def _get_filename(self, chartname, sheetnamme):
         """
         Replaces white space in self.WorkbookFileName with the value given in self.ReplaceWhiteSpaceChar
         If self.ReplaceWhiteSpaceChar is an empty string then self.WorkBookFileName is left as is
@@ -85,18 +85,19 @@ class Pyxlchart(object):
         if self.ReplaceWhiteSpaceChar != '':
             chartname.replace(' ',self.ReplaceWhiteSpaceChar)
         if self.ImageFilename != "":
-            return self.ImageFilename + "_" + chartname + "." + self.ImageType
+            return self.ImageFilename + "_" + sheetnamme + "_" + chartname + "." + self.ImageType
         else:
-            return chartname + '.' + self.ImageType
+            return sheetnamme + "_" + chartname + '.' + self.ImageType
 
-if __name__ == "__main__":
+def main():
     xl = Pyxlchart()
-    xl.WorkbookDirectory = "D:\\"
+    xl.WorkbookDirectory = "G:\\"
     xl.WorkbookFilename = "chart.xlsx"
     xl.SheetName = ""
-    xl.ImageFilename = "MyChart1"
-    xl.ExportPath = "D:\\"
+    xl.ImageFilename = "Movies"
+    xl.ExportPath = "G:\\"
     xl.ChartName = ""
     xl.start_export()
-    print("This file does not currently allow direct access")
-    print("Please import PyXLChart and run start_export()")
+
+if __name__ == "__main__":
+    main()
