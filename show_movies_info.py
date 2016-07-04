@@ -1,12 +1,11 @@
-import os
 import re
 import zlib
 import urllib
+import pymysql
+import datetime
 import xlsxwriter
 import http.client
 import urllib.request
-import pymysql
-import win32com.client
 from bs4 import BeautifulSoup
 
 class Crawler():
@@ -225,7 +224,11 @@ class Crawler():
         return
 
     #将电影类型分类展示在柱状图中并统计数量
-    def show_types_in_column(self, chart, worksheet):
+    def show_types_in_column(self, workbook):
+
+        worksheet = workbook.add_worksheet()
+
+        chart = workbook.add_chart({'type' : 'column'})
 
         query = 'SELECT movie_name, movie_types FROM movie'
         self.cursor.execute(query)
@@ -283,7 +286,7 @@ class Crawler():
 
         #设置标题
         chart.set_title({
-            'name' : '15/07/01 - 16/06/30 观影统计'
+            'name' : '15/07/01 - 16/06/30 观影类型统计'
         })
 
         #设置属性块
@@ -297,138 +300,176 @@ class Crawler():
             'font' : {'size' : 12}
         })
 
+        worksheet.insert_chart('C1', chart)
+
     #将电影语言分类展示在饼状图中
-    def show_languages_in_pie(self):
-        pass
+    def show_languages_in_pie(self, workbook):
+
+        worksheet = workbook.add_worksheet()
+
+        chart = workbook.add_chart({'type' : 'pie'})
+
+        query = 'SELECT movie_name, movie_language FROM movie'
+        self.cursor.execute(query)
+        self.conn.commit()
+        movies_lists = self.cursor.fetchall()
+
+        movie_languages_dict = dict({})
+
+        for movie in movies_lists:
+            movie_name, movie_languages = movie
+            languages = movie_languages.split('/')
+
+            for language in languages:
+                language = language.strip()
+                if language in movie_languages_dict:
+                    movie_languages_dict[language] += 1
+                else:
+                    movie_languages_dict.update({language : 1})
+
+        total_sum = 0
+        for key, val in movie_languages_dict.items():
+            total_sum += val
+
+        percent_lists = []
+        # Add table data
+        table_data = [['语言', '数目', '百分比'],]
+        for key, val in movie_languages_dict.items():
+            movie_languages_dict[key] = val
+            tmp = format(val/total_sum, '.2%')
+            percent_lists.append(tmp)
+            table_data.append([key, val, tmp])
+
+        language = '语言'
+        num = '数目'
+        percent = '百分比'
+
+        worksheet.write_column('A1', language)
+        worksheet.write_column('B1', num)
+        worksheet.write_column('C1', percent)
+
+        worksheet.write_column('A2', movie_languages_dict.keys())
+        worksheet.write_column('B2', movie_languages_dict.values())
+        worksheet.write_column('C2', percent_lists)
+
+        chart.add_series({'name' : '影片语言',
+                          'categories' : ['Sheet2', 1, 0, 1+len(movie_languages_dict.keys()), 0],
+                          'values' : ['Sheet2', 1, 1, 1+len(movie_languages_dict.values()), 1],
+                          'color' : 'red',
+                          'data_labels' : {'percentage' : True}})
+
+        #设置长宽
+        chart.set_size({
+            'x_scale' : 1.5,
+            'y_scale' : 2
+        })
+
+        #设置标题
+        chart.set_title({
+            'name' : '15/07/01 - 16/06/30 观影语言统计'
+        })
+
+        #设置属性块
+        chart.set_legend({
+            'position' : 'bottom'
+        })
+
+        worksheet.insert_chart('D1', chart)
+
+    #统计每个月观看电影数量并绘制趋势图
+    def show_monthly_watched_movies_num(self, workbook):
+        worksheet = workbook.add_worksheet()
+
+        chart = workbook.add_chart({'type' : 'line'})
+
+        query = 'SELECT movie_name, watch_time FROM movie'
+        self.cursor.execute(query)
+        self.conn.commit()
+        movies_lists = self.cursor.fetchall()
+
+        movie_monthly_dict = dict({})
+
+        for movie in movies_lists:
+            movie_name, watch_time = movie
+            watch_time = datetime.datetime.strptime(str(watch_time), "%Y-%m-%d %H:%M:%S")
+            key = str(watch_time.year) + '-' + str(watch_time.month)
+            if key in movie_monthly_dict:
+                movie_monthly_dict[key] += 1
+            else:
+                movie_monthly_dict.update({key : 1})
+
+        movie_monthly_list = sorted(movie_monthly_dict.items(), key=lambda d: d[0])
+
+        time_list = []
+        num_list = []
+
+        # Add table data
+        table_data = [['时间', '数目'],]
+        for key, val in movie_monthly_list:
+            table_data.append([key, val])
+            time_list.append(key)
+            num_list.append(val)
+
+        watch_time = '时间'
+        num = '数目'
+
+        worksheet.write_column('A1', watch_time)
+        worksheet.write_column('B1', num)
+
+        worksheet.write_column('A2', time_list)
+        worksheet.write_column('B2', num_list)
+
+        chart.add_series({'name' : '观影数目',
+                          'categories' : ['Sheet3', 1, 0, 1+len(movie_monthly_dict.keys()), 0],
+                          'values' : ['Sheet3', 1, 1, 1+len(movie_monthly_dict.values()), 1],
+                          'color' : 'red',
+                          'marker' : {'type' : 'diamond'},
+                          'smooth' : 'True',
+                          'data_labels' : {'value' : True}})
+
+        #设置长宽
+        chart.set_size({
+            'x_scale' : 1.5,
+            'y_scale' : 2
+        })
+
+        #设置标题
+        chart.set_title({
+            'name' : '15/07/01 - 16/06/30 观影时间统计'
+        })
+
+        #设置属性块
+        chart.set_legend({
+            'position' : 'bottom'
+        })
+
+        #图下方显示表格
+        chart.set_table({
+            'show_keys' : True,
+            'font' : {'size' : 12}
+        })
+
+        worksheet.insert_chart('C1', chart)
 
     #数据可视化展示
     def show_datas(self):
 
-        workbook = xlsxwriter.Workbook('chart.xlsx')
-        worksheet = workbook.add_worksheet()
+        workbook = xlsxwriter.Workbook('G:\\chart.xlsx')
 
-        chart = workbook.add_chart({'type' : 'column'})
+        #统计分类信息
+        self.show_types_in_column(workbook)
 
-        self.show_types_in_column(chart, worksheet)
+        #统计语言信息
+        self.show_languages_in_pie(workbook)
 
-        worksheet.insert_chart('C1', chart)
+        #统计月观影片数
+        self.show_monthly_watched_movies_num(workbook)
+
         workbook.close()
 
-    def unit_test(self):
-        workbook = xlsxwriter.Workbook('chart_column.xlsx')
-        worksheet = workbook.add_worksheet()
-        bold = workbook.add_format({'bold': 1})
-        # 这是个数据table的列
-        headings = ['Number', 'Batch 1', 'Batch 2']
-        data = [
-            [2, 3, 4, 5, 6, 7],
-            [10, 40, 50, 20, 10, 50],
-            [30, 60, 70, 50, 40, 30],
-        ]
-        worksheet.write_row('A1', headings, bold)
-        worksheet.write_column('A2', data[0])
-        worksheet.write_column('B2', data[1])
-        worksheet.write_column('C2', data[2])
-        ############################################
-        #创建一个图表，类型是column
-        chart1 = workbook.add_chart({'type': 'column'})
-        # 配置series,这个和前面wordsheet是有关系的。
-        chart1.add_series({
-            'name':       '=Sheet1!$B$1',
-            'categories': '=Sheet1!$A$2:$A$7',
-            'values':     '=Sheet1!$B$2:$B$7',
-        })
-        # Configure a second series. Note use of alternative syntax to define ranges.
-        chart1.add_series({
-            'name':       ['Sheet1', 0, 2],
-            'categories': ['Sheet1', 1, 0, 6, 0],
-            'values':     ['Sheet1', 1, 2, 6, 2],
-        })
-        # Add a chart title and some axis labels.
-        chart1.set_title ({'name': 'Results of sample analysis'})
-        chart1.set_x_axis({'name': 'Test number'})
-        chart1.set_y_axis({'name': 'Sample length (mm)'})
-        # Set an Excel chart style.
-        chart1.set_style(11)
-        # Insert the chart into the worksheet (with an offset).
-        worksheet.insert_chart('D2', chart1, {'x_offset': 25, 'y_offset': 10})
-        #######################################################################
-        #
-        # Create a stacked chart sub-type.
-        #
-        chart2 = workbook.add_chart({'type': 'column', 'subtype': 'stacked'})
-        # Configure the first series.
-        chart2.add_series({
-            'name':       '=Sheet1!$B$1',
-            'categories': '=Sheet1!$A$2:$A$7',
-            'values':     '=Sheet1!$B$2:$B$7',
-        })
-        # Configure second series.
-        chart2.add_series({
-            'name':       '=Sheet1!$C$1',
-            'categories': '=Sheet1!$A$2:$A$7',
-            'values':     '=Sheet1!$C$2:$C$7',
-        })
-        # Add a chart title and some axis labels.
-        chart2.set_title ({'name': 'Stacked Chart'})
-        chart2.set_x_axis({'name': 'Test number'})
-        chart2.set_y_axis({'name': 'Sample length (mm)'})
-        # Set an Excel chart style.
-        chart2.set_style(12)
-        # Insert the chart into the worksheet (with an offset).
-        worksheet.insert_chart('D18', chart2, {'x_offset': 25, 'y_offset': 10})
-        #######################################################################
-        #
-        # Create a percentage stacked chart sub-type.
-        #
-        chart3 = workbook.add_chart({'type': 'column', 'subtype': 'percent_stacked'})
-        # Configure the first series.
-        chart3.add_series({
-            'name':       '=Sheet1!$B$1',
-            'categories': '=Sheet1!$A$2:$A$7',
-            'values':     '=Sheet1!$B$2:$B$7',
-        })
-        # Configure second series.
-        chart3.add_series({
-            'name':       '=Sheet1!$C$1',
-            'categories': '=Sheet1!$A$2:$A$7',
-            'values':     '=Sheet1!$C$2:$C$7',
-        })
-        # Add a chart title and some axis labels.
-        chart3.set_title ({'name': 'Percent Stacked Chart'})
-        chart3.set_x_axis({'name': 'Test number'})
-        chart3.set_y_axis({'name': 'Sample length (mm)'})
-        # Set an Excel chart style.
-        chart3.set_style(13)
-        # Insert the chart into the worksheet (with an offset).
-        worksheet.insert_chart('D34', chart3, {'x_offset': 25, 'y_offset': 10})
-        workbook.close()
-
-    def excute_vba(self):
-        import os
-        from win32com.client import Dispatch
-        #from win32com.client import *;
-
-        xl = Dispatch("Excel.Application")
-        #xl = win32com.client.Dispatch("Excel.Application")
-        print("xl=",xl)
-
-        #[5] OK
-        xlsPath = "chart_column.xlsx"
-        absPath = os.path.abspath(xlsPath)
-        print("absPath=",absPath) #absPath= D:\tmp\tmp_dev_root\python\excel_chart\chart_demo.xls
-        wb = xl.Workbooks.open(absPath) #OK
-
-        xl.Visible = 1
-
-        ws = wb.Worksheets(1)
-
-        ws.Chart.Export("", "JPG")
-
-
-        wb.Save()
-        wb.Charts.Add()
-        wc1 = wb.Charts(1)
+    def execute_vba(self):
+        import pychart_into_img
+        pychart_into_img.main()
 
 def main():
     crawler = Crawler()
@@ -442,9 +483,7 @@ def main():
 
     crawler.show_datas()
 
-    #crawler.unit_test()
-
-    #crawler.excute_vba()
+    crawler.execute_vba()
 
 if __name__ == "__main__":
     main()
